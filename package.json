@@ -1,0 +1,17 @@
+{
+  "name": "web3-freelance-mvp",
+  "version": "1.0.0",
+  "description": "Minimal Web3 freelance escrow platform",
+  "private": true,
+  "scripts": {
+    "node": "npx hardhat node",
+    "deploy:local": "npx hardhat run scripts/deploy.js --network localhost",
+    "deploy:sepolia": "npx hardhat run scripts/deploy.js --network sepolia",
+    "test": "npx hardhat test scripts/test.js",
+    "frontend": "cd frontend && npm run dev"
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^4.0.0",
+    "hardhat": "^2.22.0"
+  }
+}
