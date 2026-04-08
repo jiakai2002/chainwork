@@ -1,0 +1,29 @@
+# Move build artifacts
+/build/
+/sources/**/build/
+**/*.mv
+**/*.mvb
+
+# Aptos CLI artifacts
+/aptos_config/
+
+# Node / frontend
+/node_modules/
+/dist/
+/.env
+/.vite
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# MacOS
+.DS_Store
+
+# VS Code
+.vscode/
+
+# Temporary files
+*.tmp
+*.swp
