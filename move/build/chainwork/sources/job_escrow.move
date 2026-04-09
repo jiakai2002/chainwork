@@ -197,8 +197,8 @@ module chainwork::job_escrow {
 
         // Assign admin as moderator if pool is empty, otherwise use pool
         // This allows demo without requiring staked moderators
-        let pool_size = moderator_pool::active_count(admin_addr);
-        let moderator = if (pool_size > 0) {
+        let size = moderator_pool::pool_size(admin_addr);
+        let moderator = if (size > 0) {
             moderator_pool::assign_next(admin_addr)
         } else {
             admin_addr  // fallback: admin acts as moderator

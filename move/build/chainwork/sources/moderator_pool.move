@@ -175,6 +175,11 @@ module chainwork::moderator_pool {
         };
     }
 
+    // ── Internal count (callable from other modules) ─────────────────────────
+    public(friend) fun pool_size(admin_addr: address): u64 acquires ModeratorPool {
+        vector::length(&borrow_global<ModeratorPool>(admin_addr).active_moderators)
+    }
+
     // ── Views ──────────────────────────────────────────────────────────────────
     #[view]
     public fun active_count(admin_addr: address): u64 acquires ModeratorPool {
