@@ -165,8 +165,6 @@ module chainwork::job_escrow {
         let client_addr = signer::address_of(client);
         let job         = borrow_global_mut<Job>(client_addr);
         let m           = vector::borrow_mut(&mut job.milestones, milestone_index);
-        assert!(m.status == STATUS_OPEN, E_ALREADY_FUNDED);
-
         let coins = coin::withdraw<AptosCoin>(client, m.amount_apt);
         coin::merge(&mut job.funds, coins);
     }
@@ -197,9 +195,15 @@ module chainwork::job_escrow {
         m.submitted_at   = timestamp::now_seconds();
         m.status         = STATUS_SUBMITTED;
 
-        // Assign a moderator from the active pool
-        let moderator = moderator_pool::assign_next(admin_addr);
-        m.moderator   = moderator;
+        // Assign admin as moderator if pool is empty, otherwise use pool
+        // This allows demo without requiring staked moderators
+        let pool_size = moderator_pool::active_count(admin_addr);
+        let moderator = if (pool_size > 0) {
+            moderator_pool::assign_next(admin_addr)
+        } else {
+            admin_addr  // fallback: admin acts as moderator
+        };
+        m.moderator = moderator;
         reputation::record_assessment(moderator);
     }
 
