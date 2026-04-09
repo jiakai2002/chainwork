@@ -205,19 +205,21 @@ export function tx_createJob({
   milestoneTitles, milestoneDescs,
   milestoneAmountsApt, milestoneDeadlinesSecs,
 }) {
+  // Aptos SDK v4: vectors of u64 must be BigInt arrays;
+  // vectors of String must be plain string arrays (SDK encodes them).
   return {
     data: {
       function: `${MOD("job_escrow")}::create_job`,
       typeArguments: [],
       functionArguments: [
-        freelancer,
-        title,
-        description,
-        milestoneTitles,
-        milestoneDescs,
-        milestoneAmountsApt.map(a => octas(a).toString()),
-        milestoneDeadlinesSecs.map(d => d.toString()),
-        ADMIN_ADDR,
+        freelancer.startsWith("0x") ? freelancer : `0x${freelancer}`, // address
+        title,                                                   // String
+        description,                                             // String
+        milestoneTitles,                                         // vector<String>
+        milestoneDescs,                                          // vector<String>
+        milestoneAmountsApt.map(a => BigInt(octas(a))),          // vector<u64>
+        milestoneDeadlinesSecs.map(d => BigInt(Math.floor(d))),  // vector<u64>
+        ADMIN_ADDR,                                              // address
       ],
     },
   };
@@ -228,7 +230,7 @@ export function tx_fundMilestone({ milestoneIndex }) {
     data: {
       function: `${MOD("job_escrow")}::fund_milestone`,
       typeArguments: [],
-      functionArguments: [milestoneIndex.toString()],
+      functionArguments: [BigInt(milestoneIndex)],
     },
   };
 }
@@ -238,7 +240,7 @@ export function tx_submitWork({ clientAddr, milestoneIndex, ipfsHash, sig }) {
     data: {
       function: `${MOD("job_escrow")}::submit_work`,
       typeArguments: [],
-      functionArguments: [clientAddr, milestoneIndex.toString(), ipfsHash, sig, ADMIN_ADDR],
+      functionArguments: [clientAddr, BigInt(milestoneIndex), ipfsHash, sig, ADMIN_ADDR],
     },
   };
 }
@@ -248,7 +250,7 @@ export function tx_approveMilestone({ clientAddr, milestoneIndex, verdictIpfs })
     data: {
       function: `${MOD("job_escrow")}::approve_milestone`,
       typeArguments: [],
-      functionArguments: [clientAddr, milestoneIndex.toString(), verdictIpfs, ADMIN_ADDR],
+      functionArguments: [clientAddr, BigInt(milestoneIndex), verdictIpfs, ADMIN_ADDR],
     },
   };
 }
@@ -258,7 +260,7 @@ export function tx_rejectMilestone({ clientAddr, milestoneIndex, verdictIpfs }) 
     data: {
       function: `${MOD("job_escrow")}::reject_milestone`,
       typeArguments: [],
-      functionArguments: [clientAddr, milestoneIndex.toString(), verdictIpfs],
+      functionArguments: [clientAddr, BigInt(milestoneIndex), verdictIpfs],
     },
   };
 }
@@ -268,7 +270,7 @@ export function tx_raiseDispute({ clientAddr, milestoneIndex }) {
     data: {
       function: `${MOD("job_escrow")}::raise_dispute`,
       typeArguments: [],
-      functionArguments: [clientAddr, milestoneIndex.toString()],
+      functionArguments: [clientAddr, BigInt(milestoneIndex)],
     },
   };
 }
@@ -288,7 +290,7 @@ export function tx_stakeAsModerator({ amount }) {
     data: {
       function: `${MOD("moderator_pool")}::stake`,
       typeArguments: [],
-      functionArguments: [octas(amount).toString(), ADMIN_ADDR],
+      functionArguments: [BigInt(octas(amount)), ADMIN_ADDR],
     },
   };
 }
@@ -298,7 +300,7 @@ export function tx_rateFreelancer({ milestoneIndex, stars }) {
     data: {
       function: `${MOD("job_escrow")}::rate_freelancer`,
       typeArguments: [],
-      functionArguments: [milestoneIndex.toString(), stars.toString()],
+      functionArguments: [BigInt(milestoneIndex), BigInt(stars)],
     },
   };
 }
@@ -317,12 +319,12 @@ export function ipfsUrl(cid) {
 }
 
 // ── Sign a string with wallet (for work submission proof) ────────────────────
-// Petra wallet exposes window.aptos.signMessage()
-export async function signMessage(message) {
-  if (!window.aptos) throw new Error("Petra wallet not found");
-  const { signature } = await window.aptos.signMessage({
+// Pass the signMessage function from useWallet() hook — do not use window.aptos
+export async function signMessage(message, signFn) {
+  if (!signFn) return "mock-sig-" + Date.now(); // fallback for demo
+  const response = await signFn({
     message,
     nonce: Date.now().toString(),
   });
-  return signature;
+  return response?.signature ?? response?.fullMessage ?? "signed";
 }

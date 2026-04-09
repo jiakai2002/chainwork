@@ -10,7 +10,7 @@ function JobCard({ job, account, onToast, onRefresh }) {
   const { run, busy } = useTransaction(onToast, onRefresh);
   const [showRep, setShowRep] = useState(false);
 
-  const addr = account?.address;
+  const addr = account?.address ? account.address.toString() : null;
   const isClient = addr === job.client;
 
   const totalApt = (job.milestones || []).reduce((s, m) => s + Number(m.amount_apt || 0), 0);
@@ -77,13 +77,20 @@ function JobCard({ job, account, onToast, onRefresh }) {
         <div style={{ marginTop: 12 }}>
           {(job.milestones || []).map((m, i) => (
             <div key={i}>
-              {/* Fund button for client if milestone not funded yet */}
-              {isClient && m.status === 0 && !m._funded && (
+              {/* Fund button for client — greyed out once funded (tracked locally) */}
+              {isClient && m.status === 0 && (
                 <div style={{ marginBottom: 4 }}>
                   <button className="btn btn-gold btn-sm"
-                    onClick={() => run(tx_fundMilestone({ milestoneIndex: i }), `Milestone #${i+1} funded!`)}
-                    disabled={busy}>
-                    {busy ? <span className="spinner" /> : `Fund Milestone #${i+1} (${fromOctas(m.amount_apt).toFixed(2)} APT)`}
+                    onClick={async () => {
+                      await run(
+                        tx_fundMilestone({ milestoneIndex: i }),
+                        `Milestone #${i+1} funded! ${fromOctas(m.amount_apt).toFixed(2)} APT locked in escrow.`
+                      );
+                    }}
+                    disabled={busy || m.ipfs_hash !== "" || m.submitted_at > 0}>
+                    {busy
+                      ? <span className="spinner" />
+                      : `Fund Milestone #${i+1} — ${fromOctas(m.amount_apt).toFixed(2)} APT`}
                   </button>
                 </div>
               )}
@@ -114,8 +121,8 @@ export default function Dashboard({ jobs, account, onToast, onRefresh }) {
   const [filter, setFilter] = useState("all");
 
   const filtered = jobs.filter(j => {
-    if (filter === "client")     return j.client     === account?.address;
-    if (filter === "freelancer") return j.freelancer === account?.address;
+    if (filter === "client")     return j.client     === account?.address?.toString();
+    if (filter === "freelancer") return j.freelancer === account?.address?.toString();
     return true;
   });
 

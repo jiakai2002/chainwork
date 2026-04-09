@@ -14,7 +14,7 @@ import {
  */
 export default function ModeratorDashboard({ jobs, onToast, onRefresh }) {
   const { account } = useWallet();
-  const addr = account?.address;
+  const addr = account?.address ? account.address.toString() : null;
   const { run, busy } = useTransaction(onToast, onRefresh);
 
   const [stakeAmt,    setStakeAmt]    = useState("500");

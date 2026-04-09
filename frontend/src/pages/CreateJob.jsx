@@ -41,11 +41,14 @@ export default function CreateJob({ onToast, onCreated }) {
     if (!account) return onToast("Connect wallet first", "error");
     if (!form.title.trim())      return onToast("Title required", "error");
     if (!form.freelancer.trim()) return onToast("Freelancer address required", "error");
+    const freelancerAddr = form.freelancer.trim().startsWith("0x")
+      ? form.freelancer.trim()
+      : `0x${form.freelancer.trim()}`;
     if (milestones.some(m => !m.title.trim())) return onToast("All milestones need a title", "error");
 
     const nowSecs = Math.floor(Date.now() / 1000);
     const payload = tx_createJob({
-      freelancer:          form.freelancer.trim(),
+      freelancer:          freelancerAddr,
       title:               form.title.trim(),
       description:         form.description.trim(),
       milestoneTitles:     milestones.map(m => m.title.trim()),

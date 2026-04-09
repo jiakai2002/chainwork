@@ -9,8 +9,8 @@ import {
 } from "../services/aptos.js";
 
 export default function MilestoneCard({ milestone, jobClientAddr, freelancerAddr, index, onToast, onRefresh }) {
-  const { account } = useWallet();
-  const addr = account?.address;
+  const { account, signMessage: walletSignMessage } = useWallet();
+  const addr = account?.address ? account.address.toString() : null;
 
   const isClient     = addr === jobClientAddr;
   const isFreelancer = addr === freelancerAddr;
@@ -33,7 +33,7 @@ export default function MilestoneCard({ milestone, jobClientAddr, freelancerAddr
     setSubmitting(true);
     try {
       const cid = await uploadToIPFS(file);
-      const sig = await signMessage(cid);
+      const sig = await signMessage(cid, walletSignMessage);
       await run(
         tx_submitWork({ clientAddr: jobClientAddr, milestoneIndex: index, ipfsHash: cid, sig }),
         "Work submitted & signed on-chain!"

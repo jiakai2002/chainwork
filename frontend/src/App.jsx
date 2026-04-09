@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { AptosWalletAdapterProvider, useWallet } from "@aptos-labs/wallet-adapter-react";
+import { Network } from "@aptos-labs/ts-sdk";
 
 import Header           from "./components/Header.jsx";
 import Dashboard        from "./pages/Dashboard.jsx";
@@ -9,7 +10,7 @@ import TierProgress     from "./pages/TierProgress.jsx";
 
 import {
   getWorkBalance, getTierOf, getFreelancerScore,
-  getAptBalance, isModerator, NETWORK,
+  getAptBalance, isModerator, NETWORK, MODULE_ADDR, ADMIN_ADDR, aptos,
 } from "./services/aptos.js";
 
 // ── Toast system ──────────────────────────────────────────────────────────────
@@ -26,7 +27,7 @@ function ToastStack({ toasts }) {
 // ── Inner app (needs wallet context) ─────────────────────────────────────────
 function Inner() {
   const { account, connected } = useWallet();
-  const addr = account?.address;
+  const addr = account?.address ? account.address.toString() : null;
 
   const [tab,         setTab]         = useState(0);
   const [jobs,        setJobs]        = useState([]);
@@ -60,14 +61,67 @@ function Inner() {
     setIsMod(mod);
   }, [addr]);
 
-  // In a real app: fetch jobs from an indexer (Aptos indexer GraphQL) or your backend
-  // that listens to on-chain events. For the MVP, we use a local mock + refresh trigger.
   const loadJobs = useCallback(async () => {
-    // TODO: Replace with Aptos indexer query or backend API
-    // e.g. fetch(`/api/jobs?network=${NETWORK}`)
-    //      or aptos.getEvents({ ... JobCreated events })
-    setJobs([]); // placeholder — see scripts/indexer_query.js
-  }, []);
+    if (!addr) return;
+    try {
+      // Fetch Job resource from the connected account (client view)
+      const clientJob = await aptos.getAccountResource({
+        accountAddress: addr,
+        resourceType: `${MODULE_ADDR}::job_escrow::Job`,
+      });
+      if (clientJob) {
+        const j = clientJob;
+        setJobs([{
+          id:          Number(j.id),
+          client:      j.client,
+          freelancer:  j.freelancer,
+          title:       j.title,
+          description: j.description,
+          admin_addr:  j.admin_addr,
+          milestones:  (j.milestones || []).map((m, i) => ({
+            ...m,
+            index:       i,
+            amount_apt:  Number(m.amount_apt),
+            deadline_secs: Number(m.deadline_secs),
+            status:      Number(m.status),
+            revision_count: Number(m.revision_count),
+          })),
+        }]);
+        return;
+      }
+    } catch { /* no job at this address */ }
+
+    // Also check if connected wallet is a freelancer — fetch job from its client field
+    // For MVP: try the known deployer address as client
+    try {
+      const knownClient = ADMIN_ADDR;
+      if (knownClient && knownClient !== addr) {
+        const clientJob = await aptos.getAccountResource({
+          accountAddress: knownClient,
+          resourceType: `${MODULE_ADDR}::job_escrow::Job`,
+        });
+        if (clientJob) {
+          const j = clientJob;
+          setJobs([{
+            id:          Number(j.id),
+            client:      j.client,
+            freelancer:  j.freelancer,
+            title:       j.title,
+            description: j.description,
+            admin_addr:  j.admin_addr,
+            milestones:  (j.milestones || []).map((m, i) => ({
+              ...m,
+              index:       i,
+              amount_apt:  Number(m.amount_apt),
+              deadline_secs: Number(m.deadline_secs),
+              status:      Number(m.status),
+              revision_count: Number(m.revision_count),
+            })),
+          }]);
+        }
+      }
+    } catch { setJobs([]); }
+  }, [addr]);
 
   useEffect(() => {
     loadWalletData();
@@ -98,13 +152,6 @@ function Inner() {
       <Header workBalance={workBalance} tier={tier} />
 
       <main className="main">
-        {/* Network banner */}
-        {NETWORK !== "mainnet" && (
-          <div className="warn-banner">
-            ⚠ Connected to <strong>{NETWORK}</strong> — not mainnet. Use Aptos faucet for test APT.
-          </div>
-        )}
-
         {/* Wallet prompt */}
         {!connected && (
           <div className="warn-banner" style={{ borderColor: "var(--blue)", color: "var(--blue)", background: "rgba(56,189,248,.07)" }}>
@@ -165,7 +212,11 @@ function Inner() {
 // ── Root with provider ────────────────────────────────────────────────────────
 export default function App() {
   return (
-    <AptosWalletAdapterProvider autoConnect={true} optInWallets={["Petra"]}>
+    <AptosWalletAdapterProvider
+      autoConnect={true}
+      optInWallets={["Petra"]}
+      dappConfig={{ network: Network.TESTNET }}
+    >
       <Inner />
     </AptosWalletAdapterProvider>
   );

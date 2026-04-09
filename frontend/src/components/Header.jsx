@@ -1,19 +1,35 @@
 import { useWallet } from "@aptos-labs/wallet-adapter-react";
 import { TIER_LABELS, TIER_COLORS } from "../services/aptos.js";
 
-export default function Header({ workBalance, tier, onConnect }) {
-  const { account, connected, disconnect, connect } = useWallet();
+export default function Header({ workBalance, tier }) {
+  const { account, connected, disconnect, connect, wallets } = useWallet();
 
   const short = account?.address
-    ? `${account.address.slice(0, 6)}…${account.address.slice(-4)}`
+    ? `${account.address.toString().slice(0, 6)}…${account.address.toString().slice(-4)}`
     : null;
 
   const tierColor = TIER_COLORS[tier] || TIER_COLORS[0];
 
+  async function handleConnect() {
+    // Find Petra in the detected wallets list; fall back to first available
+    const petra = wallets.find(w =>
+      w.name?.toLowerCase().includes("petra")
+    ) ?? wallets[0];
+    if (!petra) {
+      alert("Petra wallet not detected. Please install the Petra Chrome extension.");
+      return;
+    }
+    try {
+      await connect(petra.name);
+    } catch (e) {
+      console.error("Connect failed:", e);
+    }
+  }
+
   return (
     <header className="header">
-      <div className="header-logo">Chain<span>Work</span>
-        <span style={{ color: "var(--muted)", fontWeight: 400, marginLeft: 8 }}>v2 · Aptos</span>
+      <div className="header-logo">
+        Work<span>3</span>
       </div>
 
       <div className="header-right">
@@ -44,10 +60,12 @@ export default function Header({ workBalance, tier, onConnect }) {
               <span style={{ width: 7, height: 7, borderRadius: "50%", background: "var(--green)", display: "inline-block" }} />
               {short}
             </div>
-            <button className="btn btn-sm btn-danger" onClick={disconnect}>Disconnect</button>
+            <button className="btn btn-sm btn-danger" onClick={disconnect}>
+              Disconnect
+            </button>
           </div>
         ) : (
-          <button className="btn btn-secondary btn-sm" onClick={() => connect(wallets[0]?.name)}>
+          <button className="btn btn-secondary btn-sm" onClick={handleConnect}>
             Connect Petra
           </button>
         )}
