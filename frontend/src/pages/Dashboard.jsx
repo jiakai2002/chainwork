@@ -83,7 +83,7 @@ function JobCard({ job, account, onToast, onRefresh }) {
                   <button className="btn btn-gold btn-sm"
                     onClick={async () => {
                       await run(
-                        tx_fundMilestone({ milestoneIndex: i }),
+                        tx_fundMilestone({ jobId: job.id, milestoneIndex: i }),
                         `Milestone #${i+1} funded! ${fromOctas(m.amount_apt).toFixed(2)} APT locked in escrow.`
                       );
                     }}
@@ -97,6 +97,7 @@ function JobCard({ job, account, onToast, onRefresh }) {
               <MilestoneCard
                 milestone={m}
                 index={i}
+                jobId={job.id}
                 jobClientAddr={job.client}
                 freelancerAddr={job.freelancer}
                 onToast={onToast}

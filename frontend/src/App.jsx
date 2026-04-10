@@ -2,18 +2,19 @@ import { useState, useEffect, useCallback } from "react";
 import { AptosWalletAdapterProvider, useWallet } from "@aptos-labs/wallet-adapter-react";
 import { Network } from "@aptos-labs/ts-sdk";
 
-import Header           from "./components/Header.jsx";
-import Dashboard        from "./pages/Dashboard.jsx";
-import CreateJob        from "./pages/CreateJob.jsx";
+import Header             from "./components/Header.jsx";
+import ClientJobs         from "./pages/ClientJobs.jsx";
+import FreelancerJobs     from "./pages/FreelancerJobs.jsx";
+import CreateJob          from "./pages/CreateJob.jsx";
 import ModeratorDashboard from "./pages/ModeratorDashboard.jsx";
-import TierProgress     from "./pages/TierProgress.jsx";
+import TierProgress       from "./pages/TierProgress.jsx";
 
 import {
   getWorkBalance, getTierOf, getFreelancerScore,
-  getAptBalance, isModerator, NETWORK, MODULE_ADDR, ADMIN_ADDR, aptos,
+  getAptBalance, NETWORK, ADMIN_ADDR, loadAllJobs,
 } from "./services/aptos.js";
 
-// ── Toast system ──────────────────────────────────────────────────────────────
+// ── Toast ──────────────────────────────────────────────────────────────────────
 function ToastStack({ toasts }) {
   return (
     <div className="toast-stack">
@@ -24,7 +25,7 @@ function ToastStack({ toasts }) {
   );
 }
 
-// ── Inner app (needs wallet context) ─────────────────────────────────────────
+// ── Inner ──────────────────────────────────────────────────────────────────────
 function Inner() {
   const { account, connected } = useWallet();
   const addr = account?.address ? account.address.toString() : null;
@@ -35,8 +36,15 @@ function Inner() {
   const [aptBalance,  setAptBalance]  = useState(null);
   const [tier,        setTier]        = useState(0);
   const [score,       setScore]       = useState(null);
-  const [isMod,       setIsMod]       = useState(false);
   const [toasts,      setToasts]      = useState([]);
+
+  // Role detection
+  const adminClean = ADMIN_ADDR.replace("0x", "").toLowerCase();
+  const addrClean  = (addr || "").replace("0x", "").toLowerCase();
+  const isAdmin    = addrClean.length > 0 && addrClean === adminClean;
+  const isClient     = jobs.some(j => j.client     === addr);
+  const isFreelancer = jobs.some(j => j.freelancer === addr);
+  const isGoldPlus   = isAdmin || tier >= 2; // Admin always sees moderator tab
 
   function toast(msg, type = "info") {
     const id = Date.now() + Math.random();
@@ -44,115 +52,66 @@ function Inner() {
     setTimeout(() => setToasts(t => t.filter(x => x.id !== id)), 4500);
   }
 
-  // Load wallet-specific data
   const loadWalletData = useCallback(async () => {
     if (!addr) return;
-    const [wb, t, s, ab, mod] = await Promise.all([
+    const [wb, t, s, ab] = await Promise.all([
       getWorkBalance(addr),
       getTierOf(addr),
       getFreelancerScore(addr),
       getAptBalance(addr),
-      isModerator(addr),
     ]);
     setWorkBalance(wb);
     setTier(t);
     setScore(s);
     setAptBalance(ab);
-    setIsMod(mod);
   }, [addr]);
 
   const loadJobs = useCallback(async () => {
-    if (!addr) return;
     try {
-      // Fetch Job resource from the connected account (client view)
-      const clientJob = await aptos.getAccountResource({
-        accountAddress: addr,
-        resourceType: `${MODULE_ADDR}::job_escrow::Job`,
-      });
-      if (clientJob) {
-        const j = clientJob;
-        setJobs([{
-          id:          Number(j.id),
-          client:      j.client,
-          freelancer:  j.freelancer,
-          title:       j.title,
-          description: j.description,
-          admin_addr:  j.admin_addr,
-          milestones:  (j.milestones || []).map((m, i) => ({
-            ...m,
-            index:       i,
-            amount_apt:  Number(m.amount_apt),
-            deadline_secs: Number(m.deadline_secs),
-            status:      Number(m.status),
-            revision_count: Number(m.revision_count),
-          })),
-        }]);
-        return;
-      }
-    } catch { /* no job at this address */ }
-
-    // Also check if connected wallet is a freelancer — fetch job from its client field
-    // For MVP: try the known deployer address as client
-    try {
-      const knownClient = ADMIN_ADDR;
-      if (knownClient && knownClient !== addr) {
-        const clientJob = await aptos.getAccountResource({
-          accountAddress: knownClient,
-          resourceType: `${MODULE_ADDR}::job_escrow::Job`,
-        });
-        if (clientJob) {
-          const j = clientJob;
-          setJobs([{
-            id:          Number(j.id),
-            client:      j.client,
-            freelancer:  j.freelancer,
-            title:       j.title,
-            description: j.description,
-            admin_addr:  j.admin_addr,
-            milestones:  (j.milestones || []).map((m, i) => ({
-              ...m,
-              index:       i,
-              amount_apt:  Number(m.amount_apt),
-              deadline_secs: Number(m.deadline_secs),
-              status:      Number(m.status),
-              revision_count: Number(m.revision_count),
-            })),
-          }]);
-        }
-      }
+      const j = await loadAllJobs();
+      setJobs(j);
     } catch { setJobs([]); }
-  }, [addr]);
+  }, []);
 
   useEffect(() => {
     loadWalletData();
     loadJobs();
   }, [loadWalletData, loadJobs]);
 
-  // Auto-refresh wallet data every 30s when connected
-  useEffect(() => {
-    if (!connected) return;
-    const t = setInterval(loadWalletData, 30_000);
-    return () => clearInterval(t);
-  }, [connected, loadWalletData]);
+  function refresh() { loadWalletData(); loadJobs(); }
 
-  function refresh() {
-    loadWalletData();
-    loadJobs();
-  }
+  // ── Tab definitions ───────────────────────────────────────────────────────
+  // Client tabs: My Jobs (as client) · Create Job · Moderator (if gold) · My Tier
+  // Freelancer tabs: My Jobs (as freelancer) · Moderator (if gold) · My Tier
+  // Admin (has both): My Jobs (client) · My Jobs (freelancer) · Create Job · Moderator · My Tier
 
   const TABS = [
-    { label: "Dashboard",   show: true },
-    { label: "+ Create Job",show: true },
-    { label: "Moderator",   show: isMod },
-    { label: "My Tier",     show: true },
-  ];
+    { label: "My Jobs (Client)",     content: "client_jobs",  show: isClient || isAdmin },
+    { label: "My Jobs (Freelancer)", content: "fl_jobs",      show: isFreelancer && !isAdmin },
+    { label: "+ Create Job",         content: "create",       show: isAdmin },
+    { label: "Moderator",            content: "moderator",    show: isAdmin || isGoldPlus },
+    { label: "My Tier",              content: "tier",         show: true },
+  ].filter(t => t.show);
+
+  // If no role yet — show create job for admin, tier for others
+  const fallbackTabs = [
+    { label: "+ Create Job", content: "create", show: isAdmin },
+    { label: "My Tier",      content: "tier",   show: true },
+  ].filter(t => t.show);
+
+  const visibleTabs   = TABS.length > 0 ? TABS : fallbackTabs;
+  const activeContent = visibleTabs[tab]?.content ?? "tier";
+
+  // Reset tab if out of range
+  useEffect(() => {
+    if (tab >= visibleTabs.length) setTab(0);
+  }, [visibleTabs.length, tab]);
 
   return (
     <div className="app">
       <Header workBalance={workBalance} tier={tier} />
 
       <main className="main">
-        {/* Wallet prompt */}
         {!connected && (
           <div className="warn-banner" style={{ borderColor: "var(--blue)", color: "var(--blue)", background: "rgba(56,189,248,.07)" }}>
             Connect your Petra wallet to interact with ChainWork on Aptos.
@@ -163,14 +122,11 @@ function Inner() {
         {connected && (
           <div style={{ display: "flex", gap: 12, marginBottom: 20, flexWrap: "wrap" }}>
             {[
-              { label: "APT Balance", val: aptBalance?.toFixed(4) ?? "…", color: "var(--blue)" },
-              { label: "WORK Balance", val: workBalance?.toFixed(1) ?? "…", color: "var(--green)" },
-              { label: "Address", val: addr ? `${addr.slice(0,10)}…${addr.slice(-4)}` : "…", color: "var(--muted)" },
+              { label: "APT Balance",  val: aptBalance?.toFixed(4)  ?? "…", color: "var(--blue)"  },
+              { label: "WORK Balance", val: workBalance?.toFixed(1)  ?? "…", color: "var(--green)" },
+              { label: "Address",      val: addr ? `${addr.slice(0,10)}…${addr.slice(-4)}` : "…", color: "var(--muted)" },
             ].map(({ label, val, color }) => (
-              <div key={label} style={{
-                background: "var(--surface)", border: "1px solid var(--border)",
-                borderRadius: 6, padding: "8px 14px",
-              }}>
+              <div key={label} style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 6, padding: "8px 14px" }}>
                 <div style={{ fontFamily: "var(--mono)", fontSize: 14, fontWeight: 700, color }}>{val}</div>
                 <div style={{ fontSize: 10, color: "var(--muted)", textTransform: "uppercase", letterSpacing: ".5px" }}>{label}</div>
               </div>
@@ -180,26 +136,33 @@ function Inner() {
 
         {/* Tabs */}
         <div className="tabs">
-          {TABS.filter(t => t.show).map((t, i) => (
+          {visibleTabs.map((t, i) => (
             <button key={t.label}
               className={`tab-btn ${tab === i ? "active" : ""}`}
               onClick={() => setTab(i)}>
               {t.label}
             </button>
           ))}
+          <button className="btn btn-secondary btn-sm" onClick={refresh}
+            style={{ marginLeft: "auto", marginBottom: 1 }}>
+            ↻
+          </button>
         </div>
 
         {/* Content */}
-        {tab === 0 && (
-          <Dashboard jobs={jobs} account={account} onToast={toast} onRefresh={refresh} />
+        {activeContent === "client_jobs" && (
+          <ClientJobs jobs={jobs} account={account} onToast={toast} onRefresh={refresh} />
         )}
-        {tab === 1 && (
+        {activeContent === "fl_jobs" && (
+          <FreelancerJobs jobs={jobs} account={account} onToast={toast} onRefresh={refresh} />
+        )}
+        {activeContent === "create" && (
           <CreateJob onToast={toast} onCreated={() => { refresh(); setTab(0); }} />
         )}
-        {tab === 2 && isMod && (
+        {activeContent === "moderator" && (
           <ModeratorDashboard jobs={jobs} onToast={toast} onRefresh={refresh} />
         )}
-        {tab === (isMod ? 3 : 2) && (
+        {activeContent === "tier" && (
           <TierProgress workBalance={workBalance} tier={tier} score={score} />
         )}
       </main>
@@ -209,7 +172,6 @@ function Inner() {
   );
 }
 
-// ── Root with provider ────────────────────────────────────────────────────────
 export default function App() {
   return (
     <AptosWalletAdapterProvider

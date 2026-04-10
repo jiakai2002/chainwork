@@ -29,7 +29,7 @@ export default function Header({ workBalance, tier }) {
   return (
     <header className="header">
       <div className="header-logo">
-        Work<span>3</span>
+        Chain<span>Work</span>
       </div>
 
       <div className="header-right">

@@ -1,32 +1,25 @@
 /**
- * aptos.js
- * All on-chain interactions for ChainWork v2 on Aptos.
- *
- * Pattern:
- *   - Read  → Aptos.view()  (free, no wallet needed)
- *   - Write → signAndSubmitTransaction() via wallet adapter
+ * aptos.js - ChainWork / Work3 frontend service layer
+ * All on-chain interactions via Aptos TS SDK v4
  */
-
 import { Aptos, AptosConfig, Network } from "@aptos-labs/ts-sdk";
 
-// ── Config ────────────────────────────────────────────────────────────────────
-// Set VITE_APTOS_NETWORK=mainnet|testnet|devnet in .env
-// Set VITE_MODULE_ADDR to your deployed module address
-export const NETWORK      = import.meta.env.VITE_APTOS_NETWORK || "testnet";
-export const MODULE_ADDR  = import.meta.env.VITE_MODULE_ADDR   || "0xCAFE"; // replace after deploy
-export const ADMIN_ADDR   = import.meta.env.VITE_ADMIN_ADDR    || MODULE_ADDR;
+export const NETWORK     = import.meta.env.VITE_APTOS_NETWORK || "testnet";
+export const MODULE_ADDR = import.meta.env.VITE_MODULE_ADDR   || "0xCAFE";
+export const ADMIN_ADDR  = import.meta.env.VITE_ADMIN_ADDR    || MODULE_ADDR;
 
 const config = new AptosConfig({
   network: NETWORK === "mainnet" ? Network.MAINNET
          : NETWORK === "devnet"  ? Network.DEVNET
          :                         Network.TESTNET,
+  clientConfig: {
+    API_KEY: import.meta.env.VITE_APTOS_API_KEY || undefined,
+  },
 });
 export const aptos = new Aptos(config);
 
-// ── Module identifiers ────────────────────────────────────────────────────────
 const MOD = (name) => `${MODULE_ADDR}::${name}`;
 
-// ── Status labels (mirrors Move constants) ────────────────────────────────────
 export const MILESTONE_STATUS = {
   0: { label: "Open",      color: "#F59E0B" },
   1: { label: "Submitted", color: "#38BDF8" },
@@ -36,20 +29,15 @@ export const MILESTONE_STATUS = {
   5: { label: "Refunded",  color: "#6B7394" },
 };
 
-// ── Utility ───────────────────────────────────────────────────────────────────
-export function octas(apt) { return Math.round(apt * 1e8); }   // APT → octas
-export function fromOctas(o) { return Number(o) / 1e8; }       // octas → APT
-export function fromWork(w)  { return Number(w) / 1e8; }       // WORK (8 dec)
+export function octas(apt) { return Math.round(apt * 1e8); }
+export function fromOctas(o) { return Number(o) / 1e8; }
+export function fromWork(w)  { return Number(w) / 1e8; }
 
-// ── WORK Token ───────────────────────────────────────────────────────────────
+// ── WORK token ────────────────────────────────────────────────────────────────
 export async function getWorkBalance(addr) {
   try {
     const [bal] = await aptos.view({
-      payload: {
-        function: `${MOD("work_token")}::balance`,
-        typeArguments: [],
-        functionArguments: [addr],
-      },
+      payload: { function: `${MOD("work_token")}::balance`, typeArguments: [], functionArguments: [addr] },
     });
     return fromWork(bal);
   } catch { return 0; }
@@ -58,11 +46,7 @@ export async function getWorkBalance(addr) {
 export async function getTierOf(addr) {
   try {
     const [tier] = await aptos.view({
-      payload: {
-        function: `${MOD("work_token")}::tier_of`,
-        typeArguments: [],
-        functionArguments: [addr],
-      },
+      payload: { function: `${MOD("work_token")}::tier_of`, typeArguments: [], functionArguments: [addr] },
     });
     return Number(tier);
   } catch { return 0; }
@@ -75,11 +59,7 @@ export const TIER_COLORS = ["#CD7F32", "#C0C0C0", "#FFD700", "#E5E4E2"];
 export async function getFreelancerScore(addr) {
   try {
     const result = await aptos.view({
-      payload: {
-        function: `${MOD("reputation")}::freelancer_score`,
-        typeArguments: [],
-        functionArguments: [addr],
-      },
+      payload: { function: `${MOD("reputation")}::freelancer_score`, typeArguments: [], functionArguments: [addr] },
     });
     const [completed, disputed, rejected, totalRating, ratingCount, lifetimeWork, streak] = result;
     return {
@@ -97,77 +77,31 @@ export async function getFreelancerScore(addr) {
 export async function getCompletionRate(addr) {
   try {
     const [rate] = await aptos.view({
-      payload: {
-        function: `${MOD("reputation")}::completion_rate`,
-        typeArguments: [],
-        functionArguments: [addr],
-      },
+      payload: { function: `${MOD("reputation")}::completion_rate`, typeArguments: [], functionArguments: [addr] },
     });
     return Number(rate);
   } catch { return 0; }
 }
 
-export async function getModeratorScore(addr) {
+export async function streak_days(addr) {
   try {
-    const result = await aptos.view({
-      payload: {
-        function: `${MOD("reputation")}::moderator_score`,
-        typeArguments: [],
-        functionArguments: [addr],
-      },
+    const [s] = await aptos.view({
+      payload: { function: `${MOD("reputation")}::streak_days`, typeArguments: [], functionArguments: [addr] },
     });
-    const [total, overturned, slashed, stake, active] = result;
-    return {
-      total:     Number(total),
-      overturned:Number(overturned),
-      slashed:   fromWork(slashed),
-      stake:     fromWork(stake),
-      active:    Boolean(active),
-    };
-  } catch { return null; }
+    return Number(s);
+  } catch { return 0; }
 }
 
 export async function isModerator(addr) {
   try {
     const [ok] = await aptos.view({
-      payload: {
-        function: `${MOD("moderator_pool")}::is_active`,
-        typeArguments: [],
-        functionArguments: [addr],
-      },
+      payload: { function: `${MOD("moderator_pool")}::is_active`, typeArguments: [], functionArguments: [addr] },
     });
     return Boolean(ok);
   } catch { return false; }
 }
 
-// ── Milestone reads ───────────────────────────────────────────────────────────
-export async function getMilestoneStatus(clientAddr, index) {
-  try {
-    const [status] = await aptos.view({
-      payload: {
-        function: `${MOD("job_escrow")}::milestone_status`,
-        typeArguments: [],
-        functionArguments: [clientAddr, index.toString()],
-      },
-    });
-    return Number(status);
-  } catch { return null; }
-}
-
-export async function getMilestoneIPFS(clientAddr, index) {
-  try {
-    const [hash] = await aptos.view({
-      payload: {
-        function: `${MOD("job_escrow")}::milestone_ipfs`,
-        typeArguments: [],
-        functionArguments: [clientAddr, index.toString()],
-      },
-    });
-    return hash;
-  } catch { return ""; }
-}
-
-// ── Account APT balance ───────────────────────────────────────────────────────
+// ── APT balance ───────────────────────────────────────────────────────────────
 export async function getAptBalance(addr) {
   try {
     const res = await aptos.getAccountCoinAmount({
@@ -178,109 +112,158 @@ export async function getAptBalance(addr) {
   } catch { return 0; }
 }
 
-// ── Transaction builders (returned as payloads for wallet adapter) ─────────────
+// ── Load all jobs from JobStore table ─────────────────────────────────────────
+export async function loadAllJobs() {
+  try {
+    // Get total job count
+    const [total] = await aptos.view({
+      payload: { function: `${MOD("job_escrow")}::total_jobs`, typeArguments: [], functionArguments: [ADMIN_ADDR] },
+    });
+    const count = Number(total);
+    if (count === 0) return [];
+
+    // Get the JobStore resource to find the table handle
+    const store = await aptos.getAccountResource({
+      accountAddress: ADMIN_ADDR,
+      resourceType: `${MODULE_ADDR}::job_escrow::JobStore`,
+    });
+    const tableHandle = store.jobs.handle;
+
+    const jobs = [];
+    for (let id = 1; id <= count; id++) {
+      try {
+        const entry = await aptos.getTableItem({
+          handle: tableHandle,
+          data: {
+            key_type: "u64",
+            value_type: `${MODULE_ADDR}::job_escrow::Job`,
+            key: id.toString(),
+          },
+        });
+        if (entry) {
+          jobs.push({
+            id:          Number(entry.id),
+            client:      entry.client,
+            freelancer:  entry.freelancer,
+            title:       entry.title,
+            description: entry.description,
+            admin_addr:  entry.admin_addr,
+            milestones:  (entry.milestones || []).map((m, i) => ({
+              ...m,
+              index:          i,
+              amount_apt:     Number(m.amount_apt),
+              deadline_secs:  Number(m.deadline_secs),
+              status:         Number(m.status),
+              revision_count: Number(m.revision_count),
+              submitted_at:   Number(m.submitted_at),
+            })),
+          });
+        }
+      } catch { /* skip missing id */ }
+    }
+    return jobs;
+  } catch (e) {
+    console.error("loadAllJobs error:", e);
+    return [];
+  }
+}
+
+// ── Transaction builders ───────────────────────────────────────────────────────
 
 export function tx_registerFreelancer() {
-  return {
-    data: {
-      function: `${MOD("reputation")}::register_freelancer`,
-      typeArguments: [],
-      functionArguments: [],
-    },
-  };
+  return { data: { function: `${MOD("reputation")}::register_freelancer`, typeArguments: [], functionArguments: [] } };
 }
 
 export function tx_registerWorkToken() {
-  return {
-    data: {
-      function: `${MOD("work_token")}::register`,
-      typeArguments: [],
-      functionArguments: [],
-    },
-  };
+  return { data: { function: `${MOD("work_token")}::register`, typeArguments: [], functionArguments: [] } };
 }
 
-export function tx_createJob({
-  freelancer, title, description,
-  milestoneTitles, milestoneDescs,
-  milestoneAmountsApt, milestoneDeadlinesSecs,
-}) {
-  // Aptos SDK v4: vectors of u64 must be BigInt arrays;
-  // vectors of String must be plain string arrays (SDK encodes them).
+export function tx_createJob({ freelancer, title, description, milestoneTitles, milestoneDescs, milestoneAmountsApt, milestoneDeadlinesSecs }) {
+  const addr = freelancer.startsWith("0x") ? freelancer : `0x${freelancer}`;
   return {
     data: {
       function: `${MOD("job_escrow")}::create_job`,
       typeArguments: [],
       functionArguments: [
-        freelancer.startsWith("0x") ? freelancer : `0x${freelancer}`, // address
-        title,                                                   // String
-        description,                                             // String
-        milestoneTitles,                                         // vector<String>
-        milestoneDescs,                                          // vector<String>
-        milestoneAmountsApt.map(a => BigInt(octas(a))),          // vector<u64>
-        milestoneDeadlinesSecs.map(d => BigInt(Math.floor(d))),  // vector<u64>
-        ADMIN_ADDR,                                              // address
+        addr,
+        title,
+        description,
+        milestoneTitles,
+        milestoneDescs,
+        milestoneAmountsApt.map(a => BigInt(octas(a))),
+        milestoneDeadlinesSecs.map(d => BigInt(Math.floor(d))),
+        ADMIN_ADDR,
       ],
     },
   };
 }
 
-export function tx_fundMilestone({ milestoneIndex }) {
+export function tx_fundMilestone({ jobId, milestoneIndex }) {
   return {
     data: {
       function: `${MOD("job_escrow")}::fund_milestone`,
       typeArguments: [],
-      functionArguments: [BigInt(milestoneIndex)],
+      functionArguments: [BigInt(jobId), BigInt(milestoneIndex), ADMIN_ADDR],
     },
   };
 }
 
-export function tx_submitWork({ clientAddr, milestoneIndex, ipfsHash, sig }) {
+export function tx_submitWork({ jobId, milestoneIndex, ipfsHash, sig }) {
   return {
     data: {
       function: `${MOD("job_escrow")}::submit_work`,
       typeArguments: [],
-      functionArguments: [clientAddr, BigInt(milestoneIndex), ipfsHash, sig, ADMIN_ADDR],
+      functionArguments: [BigInt(jobId), BigInt(milestoneIndex), ipfsHash, sig, ADMIN_ADDR],
     },
   };
 }
 
-export function tx_approveMilestone({ clientAddr, milestoneIndex, verdictIpfs }) {
+export function tx_approveMilestone({ jobId, milestoneIndex, verdictIpfs }) {
   return {
     data: {
       function: `${MOD("job_escrow")}::approve_milestone`,
       typeArguments: [],
-      functionArguments: [clientAddr, BigInt(milestoneIndex), verdictIpfs, ADMIN_ADDR],
+      functionArguments: [BigInt(jobId), BigInt(milestoneIndex), verdictIpfs, ADMIN_ADDR],
     },
   };
 }
 
-export function tx_rejectMilestone({ clientAddr, milestoneIndex, verdictIpfs }) {
+export function tx_rejectMilestone({ jobId, milestoneIndex, verdictIpfs }) {
   return {
     data: {
       function: `${MOD("job_escrow")}::reject_milestone`,
       typeArguments: [],
-      functionArguments: [clientAddr, BigInt(milestoneIndex), verdictIpfs],
+      functionArguments: [BigInt(jobId), BigInt(milestoneIndex), verdictIpfs, ADMIN_ADDR],
     },
   };
 }
 
-export function tx_raiseDispute({ clientAddr, milestoneIndex }) {
+export function tx_raiseDispute({ jobId, milestoneIndex }) {
   return {
     data: {
       function: `${MOD("job_escrow")}::raise_dispute`,
       typeArguments: [],
-      functionArguments: [clientAddr, BigInt(milestoneIndex)],
+      functionArguments: [BigInt(jobId), BigInt(milestoneIndex), ADMIN_ADDR],
     },
   };
 }
 
-export function tx_voteDispute({ panelAddr, approve }) {
+export function tx_resolveDispute({ jobId, milestoneIndex, releaseToFreelancer }) {
   return {
     data: {
-      function: `${MOD("dispute")}::vote`,
+      function: `${MOD("job_escrow")}::admin_resolve_dispute`,
       typeArguments: [],
-      functionArguments: [panelAddr, approve],
+      functionArguments: [BigInt(jobId), BigInt(milestoneIndex), releaseToFreelancer, ADMIN_ADDR],
+    },
+  };
+}
+
+export function tx_rateFreelancer({ jobId, milestoneIndex, stars }) {
+  return {
+    data: {
+      function: `${MOD("job_escrow")}::rate_freelancer`,
+      typeArguments: [],
+      functionArguments: [BigInt(jobId), BigInt(milestoneIndex), BigInt(stars), ADMIN_ADDR],
     },
   };
 }
@@ -295,22 +278,10 @@ export function tx_stakeAsModerator({ amount }) {
   };
 }
 
-export function tx_rateFreelancer({ milestoneIndex, stars }) {
-  return {
-    data: {
-      function: `${MOD("job_escrow")}::rate_freelancer`,
-      typeArguments: [],
-      functionArguments: [BigInt(milestoneIndex), BigInt(stars)],
-    },
-  };
-}
-
-// ── IPFS helpers (via web3.storage or nft.storage public gateway) ─────────────
+// ── IPFS (mocked for demo) ────────────────────────────────────────────────────
 export async function uploadToIPFS(file) {
-  // In production: use web3.storage SDK or Pinata API
-  // For local demo: use a mock hash
-  const mockCID = "QmMockHash" + Date.now().toString(36);
-  console.warn("IPFS upload mocked — replace with web3.storage in production");
+  const mockCID = "QmMock" + Date.now().toString(36);
+  console.warn("IPFS upload mocked");
   return mockCID;
 }
 
@@ -318,13 +289,8 @@ export function ipfsUrl(cid) {
   return `https://ipfs.io/ipfs/${cid}`;
 }
 
-// ── Sign a string with wallet (for work submission proof) ────────────────────
-// Pass the signMessage function from useWallet() hook — do not use window.aptos
 export async function signMessage(message, signFn) {
-  if (!signFn) return "mock-sig-" + Date.now(); // fallback for demo
-  const response = await signFn({
-    message,
-    nonce: Date.now().toString(),
-  });
+  if (!signFn) return "mock-sig-" + Date.now();
+  const response = await signFn({ message, nonce: Date.now().toString() });
   return response?.signature ?? response?.fullMessage ?? "signed";
 }

@@ -17,6 +17,7 @@ module chainwork::dispute {
 
     // ── Panel for a specific milestone ────────────────────────────────────────
     struct DisputePanel has key {
+        job_id:          u64,
         client_addr:     address,
         milestone_index: u64,
         panelists:       vector<address>,  // 3 moderators
@@ -30,6 +31,7 @@ module chainwork::dispute {
     // ── Open a dispute panel (called internally after raise_dispute) ───────────
     public entry fun open_panel(
         caller:          &signer,
+        job_id:          u64,
         client_addr:     address,
         milestone_index: u64,
         admin_addr:      address,
@@ -45,6 +47,7 @@ module chainwork::dispute {
         vector::push_back(&mut panelists, p3);
 
         move_to(caller, DisputePanel {
+            job_id,
             client_addr,
             milestone_index,
             panelists,
@@ -85,7 +88,7 @@ module chainwork::dispute {
 
             // Execute on escrow
             job_escrow::resolve_dispute(
-                panel.client_addr,
+                panel.job_id,
                 panel.milestone_index,
                 release,
                 panel.admin_addr,

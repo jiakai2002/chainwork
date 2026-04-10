@@ -8,13 +8,14 @@ import {
   uploadToIPFS, ipfsUrl, signMessage, fromOctas,
 } from "../services/aptos.js";
 
-export default function MilestoneCard({ milestone, jobClientAddr, freelancerAddr, index, onToast, onRefresh }) {
+export default function MilestoneCard({ milestone, jobId, jobClientAddr, freelancerAddr, index, onToast, onRefresh }) {
   const { account, signMessage: walletSignMessage } = useWallet();
   const addr = account?.address ? account.address.toString() : null;
 
   const isClient     = addr === jobClientAddr;
   const isFreelancer = addr === freelancerAddr;
-  const isMod        = addr === milestone.moderator;
+  // Moderator: either assigned address, OR client acting as moderator (admin fallback)
+  const isMod = addr === milestone.moderator || isClient;
 
   const { run, busy } = useTransaction(onToast, onRefresh);
 
@@ -35,7 +36,7 @@ export default function MilestoneCard({ milestone, jobClientAddr, freelancerAddr
       const cid = await uploadToIPFS(file);
       const sig = await signMessage(cid, walletSignMessage);
       await run(
-        tx_submitWork({ clientAddr: jobClientAddr, milestoneIndex: index, ipfsHash: cid, sig }),
+        tx_submitWork({ jobId: jobId, milestoneIndex: index, ipfsHash: cid, sig }),
         "Work submitted & signed on-chain!"
       );
     } catch (e) {
@@ -164,7 +165,7 @@ export default function MilestoneCard({ milestone, jobClientAddr, freelancerAddr
         {/* Either party: dispute */}
         {(isClient || isFreelancer) && (status === 1 || status === 3) && (
           <button className="btn btn-danger btn-sm"
-            onClick={() => run(tx_raiseDispute({ clientAddr: jobClientAddr, milestoneIndex: index }), "Dispute raised — panel assigned.")}
+            onClick={() => run(tx_raiseDispute({ jobId: jobId, milestoneIndex: index }), "Dispute raised — panel assigned.")}
             disabled={busy}>
             {busy ? <span className="spinner" /> : "⚠ Raise Dispute"}
           </button>
@@ -175,7 +176,7 @@ export default function MilestoneCard({ milestone, jobClientAddr, freelancerAddr
           <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
             <span style={{ fontFamily: "var(--mono)", fontSize: 11, color: "var(--muted)" }}>Rate:</span>
             {[1, 2, 3, 4, 5].map(s => (
-              <button key={s} onClick={() => { setRating(s); run(tx_rateFreelancer({ milestoneIndex: index, stars: s }), `Rated ${s}★`); }}
+              <button key={s} onClick={() => { setRating(s); run(tx_rateFreelancer({ jobId: jobId, milestoneIndex: index, stars: s }), `Rated ${s}★`); }}
                 style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18,
                   color: s <= rating ? "var(--gold)" : "var(--border)" }}>
                 ★

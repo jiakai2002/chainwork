@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useWallet } from "@aptos-labs/wallet-adapter-react";
 import { useTransaction } from "../hooks/useTransaction.js";
-import { tx_createJob } from "../services/aptos.js";
+import { tx_createJob, tx_fundMilestone, ADMIN_ADDR, aptos, MODULE_ADDR } from "../services/aptos.js";
 
 const defaultMilestone = () => ({
   title: "", desc: "", amountApt: "0.1", deadlineDays: "7"
@@ -59,7 +59,28 @@ export default function CreateJob({ onToast, onCreated }) {
       ),
     });
 
-    await run(payload, `Job created with ${milestones.length} milestone(s)!`);
+    // Step 1: create job
+    await run(payload, `Job created! Now funding ${milestones.length} milestone(s)…`);
+
+    // Step 2: get the new job ID (next_id - 1)
+    try {
+      const store = await aptos.getAccountResource({
+        accountAddress: ADMIN_ADDR,
+        resourceType: `${MODULE_ADDR}::job_escrow::JobStore`,
+      });
+      const jobId = Number(store.next_id) - 1;
+
+      // Step 3: fund each milestone
+      for (let i = 0; i < milestones.length; i++) {
+        await run(
+          tx_fundMilestone({ jobId, milestoneIndex: i }),
+          `Milestone #${i + 1} funded — ${milestones[i].amountApt} APT locked in escrow.`
+        );
+      }
+    } catch (e) {
+      onToast("Job created but auto-fund failed. Fund milestones manually from Dashboard.", "error");
+    }
+
     setForm({ freelancer: "", title: "", description: "" });
     setMilestones([defaultMilestone()]);
   }

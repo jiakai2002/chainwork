@@ -95,6 +95,7 @@ module chainwork::reputation {
         freelancer: address,
         work_earned: u64,
     ) acquires FreelancerScore {
+        if (!exists<FreelancerScore>(freelancer)) { return };
         let s = borrow_global_mut<FreelancerScore>(freelancer);
         s.milestones_completed = s.milestones_completed + 1;
         s.lifetime_work_earned = s.lifetime_work_earned + work_earned;
@@ -111,16 +112,19 @@ module chainwork::reputation {
     }
 
     public(friend) fun record_milestone_disputed(freelancer: address) acquires FreelancerScore {
+        if (!exists<FreelancerScore>(freelancer)) { return };
         borrow_global_mut<FreelancerScore>(freelancer).milestones_disputed =
             borrow_global<FreelancerScore>(freelancer).milestones_disputed + 1;
     }
 
     public(friend) fun record_milestone_rejected(freelancer: address) acquires FreelancerScore {
+        if (!exists<FreelancerScore>(freelancer)) { return };
         borrow_global_mut<FreelancerScore>(freelancer).milestones_rejected =
             borrow_global<FreelancerScore>(freelancer).milestones_rejected + 1;
     }
 
     public(friend) fun add_rating(freelancer: address, stars: u64) acquires FreelancerScore {
+        if (!exists<FreelancerScore>(freelancer)) { return };
         assert!(stars >= 1 && stars <= 5, 3);
         let s = borrow_global_mut<FreelancerScore>(freelancer);
         s.total_rating_points = s.total_rating_points + (stars * 100);
@@ -130,6 +134,7 @@ module chainwork::reputation {
     // ── Moderator writes ───────────────────────────────────────────────────────
 
     public(friend) fun record_assessment(moderator: address) acquires ModeratorScore {
+        if (!exists<ModeratorScore>(moderator)) { return };
         borrow_global_mut<ModeratorScore>(moderator).assessments_total =
             borrow_global<ModeratorScore>(moderator).assessments_total + 1;
     }
@@ -153,16 +158,19 @@ module chainwork::reputation {
 
     // ── Client writes ──────────────────────────────────────────────────────────
     public(friend) fun record_job_posted(client: address) acquires ClientScore {
+        if (!exists<ClientScore>(client)) { return };
         borrow_global_mut<ClientScore>(client).jobs_posted =
             borrow_global<ClientScore>(client).jobs_posted + 1;
     }
 
     public(friend) fun record_job_completed(client: address) acquires ClientScore {
+        if (!exists<ClientScore>(client)) { return };
         borrow_global_mut<ClientScore>(client).jobs_completed =
             borrow_global<ClientScore>(client).jobs_completed + 1;
     }
 
     public(friend) fun record_dispute_raised(client: address) acquires ClientScore {
+        if (!exists<ClientScore>(client)) { return };
         borrow_global_mut<ClientScore>(client).disputes_raised =
             borrow_global<ClientScore>(client).disputes_raised + 1;
     }
