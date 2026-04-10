@@ -13,9 +13,8 @@ export default function ModeratorDashboard({ jobs, onToast, onRefresh }) {
   const [stakeAmt, setStakeAmt] = useState("500");
   const [verdicts, setVerdicts] = useState({});
 
-  const adminClean = ADMIN_ADDR.replace("0x", "").toLowerCase();
-  const addrClean  = (addr || "").replace("0x", "").toLowerCase();
-  const isAdmin    = addrClean.length > 0 && addrClean === adminClean;
+  const normalize  = (a) => (a || "").replace("0x", "").toLowerCase().padStart(64, "0");
+  const isAdmin    = addr ? normalize(addr) === normalize(ADMIN_ADDR) : false;
 
   // Milestones assigned to this moderator (Submitted or Disputed)
   const myAssignments = [];

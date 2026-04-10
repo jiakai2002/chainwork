@@ -39,9 +39,9 @@ function Inner() {
   const [toasts,      setToasts]      = useState([]);
 
   // Role detection
-  const adminClean = ADMIN_ADDR.replace("0x", "").toLowerCase();
-  const addrClean  = (addr || "").replace("0x", "").toLowerCase();
-  const isAdmin    = addrClean.length > 0 && addrClean === adminClean;
+  // Normalize addresses: strip 0x, lowercase, pad to 64 chars
+  const normalize  = (a) => (a || "").replace("0x", "").toLowerCase().padStart(64, "0");
+  const isAdmin    = addr ? normalize(addr) === normalize(ADMIN_ADDR) : false;
   const isClient     = jobs.some(j => j.client     === addr);
   const isFreelancer = jobs.some(j => j.freelancer === addr);
   const isGoldPlus   = isAdmin || tier >= 2; // Admin always sees moderator tab
@@ -86,11 +86,11 @@ function Inner() {
   // Admin (has both): My Jobs (client) · My Jobs (freelancer) · Create Job · Moderator · My Tier
 
   const TABS = [
-    { label: "My Jobs (Client)",     content: "client_jobs",  show: isClient || isAdmin },
-    { label: "My Jobs (Freelancer)", content: "fl_jobs",      show: isFreelancer && !isAdmin },
-    { label: "+ Create Job",         content: "create",       show: isAdmin },
-    { label: "Moderator",            content: "moderator",    show: isAdmin || isGoldPlus },
-    { label: "My Tier",              content: "tier",         show: true },
+    { label: "My Jobs",       content: "client_jobs",  show: isClient || isAdmin },
+    { label: "My Jobs",       content: "fl_jobs",      show: isFreelancer && !isAdmin },
+    { label: "+ Create Job",  content: "create",       show: isClient || isAdmin },
+    { label: "Moderator",     content: "moderator",    show: true },
+    { label: "My Tier",       content: "tier",         show: true },
   ].filter(t => t.show);
 
   // If no role yet — show create job for admin, tier for others

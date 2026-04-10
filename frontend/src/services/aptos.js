@@ -6,7 +6,9 @@ import { Aptos, AptosConfig, Network } from "@aptos-labs/ts-sdk";
 
 export const NETWORK     = import.meta.env.VITE_APTOS_NETWORK || "testnet";
 export const MODULE_ADDR = import.meta.env.VITE_MODULE_ADDR   || "0xCAFE";
-export const ADMIN_ADDR  = import.meta.env.VITE_ADMIN_ADDR    || MODULE_ADDR;
+const _adminRaw  = import.meta.env.VITE_ADMIN_ADDR || MODULE_ADDR;
+// Always export with 0x prefix and full 64-char hex
+export const ADMIN_ADDR = "0x" + _adminRaw.replace("0x", "").toLowerCase().padStart(64, "0");
 
 const config = new AptosConfig({
   network: NETWORK === "mainnet" ? Network.MAINNET
