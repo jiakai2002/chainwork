@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useWallet } from "@aptos-labs/wallet-adapter-react";
 import { useTransaction } from "../hooks/useTransaction.js";
 import {
-  fromOctas, MILESTONE_STATUS, tx_fundMilestone,
+  fromOctas, MILESTONE_STATUS,
   tx_approveMilestone, tx_rejectMilestone,
   tx_rateFreelancer, uploadToIPFS, ipfsUrl,
 } from "../services/aptos.js";
@@ -56,14 +56,15 @@ function MilestoneRow({ m, i, job, onToast, onRefresh }) {
 
       {/* Actions */}
       <div className="card-actions">
-        {/* Status 0: open, not yet funded — fund button */}
-        {m.status === 0 && !m._funded && (
-          <button className="btn btn-gold btn-sm"
-            onClick={() => run(tx_fundMilestone({ jobId: job.id, milestoneIndex: i }),
-              `Milestone #${i+1} funded!`)}
-            disabled={busy}>
-            {busy ? <span className="spinner" /> : `Fund ${fromOctas(m.amount_apt).toFixed(2)} APT`}
-          </button>
+        {/* Status 0: open — show funded badge (auto-funded on creation) */}
+        {m.status === 0 && (
+          <span style={{
+            fontFamily: "var(--mono)", fontSize: 11, padding: "3px 10px",
+            borderRadius: 3, border: "1px solid var(--green)", color: "var(--green)",
+            background: "rgba(34,197,94,.08)"
+          }}>
+            ✓ Funded — {fromOctas(m.amount_apt).toFixed(2)} APT locked
+          </span>
         )}
 
         {/* Status 1: submitted — client can approve or reject */}
