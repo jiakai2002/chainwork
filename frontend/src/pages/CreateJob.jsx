@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useWallet } from "@aptos-labs/wallet-adapter-react";
 import { useTransaction } from "../hooks/useTransaction.js";
-import { tx_createJob, tx_fundMilestone, ADMIN_ADDR, aptos, MODULE_ADDR } from "../services/aptos.js";
+import { tx_createJob, tx_fundMilestone, MODULE_ADDR, aptos } from "../services/aptos.js";
 
 const defaultMilestone = () => ({
   title: "", desc: "", amountApt: "0.1", deadlineDays: "7"
@@ -65,7 +65,7 @@ export default function CreateJob({ onToast, onCreated }) {
     // Step 2: get the new job ID (next_id - 1)
     try {
       const store = await aptos.getAccountResource({
-        accountAddress: ADMIN_ADDR,
+        accountAddress: MODULE_ADDR,
         resourceType: `${MODULE_ADDR}::job_escrow::JobStore`,
       });
       const jobId = Number(store.next_id) - 1;

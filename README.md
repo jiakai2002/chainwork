@@ -206,7 +206,7 @@ cd frontend && npm install && npm run dev
 ```env
 VITE_APTOS_NETWORK=testnet
 VITE_MODULE_ADDR=0xf6899d06f6f8754cfcd6184d6bff89be92a1a69ea425d7aacdf462cbdf2ea8b9
-VITE_ADMIN_ADDR=0xf6899d06f6f8754cfcd6184d6bff89be92a1a69ea425d7aacdf462cbdf2ea8b9
+VITE_MODULE_ADDR=0xf6899d06f6f8754cfcd6184d6bff89be92a1a69ea425d7aacdf462cbdf2ea8b9
 VITE_APTOS_API_KEY=<YOUR_API_KEY>
 ```
 

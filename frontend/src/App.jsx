@@ -10,22 +10,18 @@ import ModeratorDashboard from "./pages/ModeratorDashboard.jsx";
 import TierProgress       from "./pages/TierProgress.jsx";
 
 import {
-  getWorkBalance, getTierOf, getFreelancerScore,
-  getAptBalance, NETWORK, ADMIN_ADDR, loadAllJobs,
+  getWorkBalance, getTierOf, getFreelancerScore, getAptBalance,
+  MODERATOR_ADDR, loadAllJobs,
 } from "./services/aptos.js";
 
-// ── Toast ──────────────────────────────────────────────────────────────────────
 function ToastStack({ toasts }) {
   return (
     <div className="toast-stack">
-      {toasts.map(t => (
-        <div key={t.id} className={`toast ${t.type}`}>{t.msg}</div>
-      ))}
+      {toasts.map(t => <div key={t.id} className={`toast ${t.type}`}>{t.msg}</div>)}
     </div>
   );
 }
 
-// ── Inner ──────────────────────────────────────────────────────────────────────
 function Inner() {
   const { account, connected } = useWallet();
   const addr = account?.address ? account.address.toString() : null;
@@ -38,13 +34,12 @@ function Inner() {
   const [score,       setScore]       = useState(null);
   const [toasts,      setToasts]      = useState([]);
 
-  // Role detection
-  // Normalize addresses: strip 0x, lowercase, pad to 64 chars
-  const normalize  = (a) => (a || "").replace("0x", "").toLowerCase().padStart(64, "0");
-  const isAdmin    = addr ? normalize(addr) === normalize(ADMIN_ADDR) : false;
-  const isClient     = jobs.some(j => j.client     === addr);
-  const isFreelancer = jobs.some(j => j.freelancer === addr);
-  const isGoldPlus   = isAdmin || tier >= 2; // Admin always sees moderator tab
+  const norm = (a) => (a || "").replace("0x", "").toLowerCase().padStart(64, "0");
+  const isModerator  = addr ? norm(addr) === norm(MODERATOR_ADDR) : false;
+  const isClient     = !isModerator && jobs.some(j => norm(j.client)     === norm(addr || ""));
+  const isFreelancer = !isModerator && jobs.some(j => norm(j.freelancer) === norm(addr || ""));
+  // If no jobs yet, treat non-moderator as client (can create jobs)
+  const isClientRole = !isModerator && (isClient || (!isFreelancer && !isModerator));
 
   function toast(msg, type = "info") {
     const id = Date.now() + Math.random();
@@ -55,62 +50,37 @@ function Inner() {
   const loadWalletData = useCallback(async () => {
     if (!addr) return;
     const [wb, t, s, ab] = await Promise.all([
-      getWorkBalance(addr),
-      getTierOf(addr),
-      getFreelancerScore(addr),
-      getAptBalance(addr),
+      getWorkBalance(addr), getTierOf(addr), getFreelancerScore(addr), getAptBalance(addr),
     ]);
-    setWorkBalance(wb);
-    setTier(t);
-    setScore(s);
-    setAptBalance(ab);
+    setWorkBalance(wb); setTier(t); setScore(s); setAptBalance(ab);
   }, [addr]);
 
   const loadJobs = useCallback(async () => {
-    try {
-      const j = await loadAllJobs();
-      setJobs(j);
-    } catch { setJobs([]); }
+    try { setJobs(await loadAllJobs()); } catch { setJobs([]); }
   }, []);
 
-  useEffect(() => {
-    loadWalletData();
-    loadJobs();
-  }, [loadWalletData, loadJobs]);
+  useEffect(() => { loadWalletData(); loadJobs(); }, [loadWalletData, loadJobs]);
 
   function refresh() { loadWalletData(); loadJobs(); }
 
-  // ── Tab definitions ───────────────────────────────────────────────────────
-  // Client tabs: My Jobs (as client) · Create Job · Moderator (if gold) · My Tier
-  // Freelancer tabs: My Jobs (as freelancer) · Moderator (if gold) · My Tier
-  // Admin (has both): My Jobs (client) · My Jobs (freelancer) · Create Job · Moderator · My Tier
-
+  // ── Role-based tabs ────────────────────────────────────────────────────────
   const TABS = [
-    { label: "My Jobs",       content: "client_jobs",  show: isClient || isAdmin },
-    { label: "My Jobs",       content: "fl_jobs",      show: isFreelancer && !isAdmin },
-    { label: "+ Create Job",  content: "create",       show: isClient || isAdmin },
-    { label: "Moderator",     content: "moderator",    show: true },
-    { label: "My Tier",       content: "tier",         show: true },
+    { label: "My Jobs",      content: "client_jobs", show: isClient     },
+    { label: "My Jobs",      content: "fl_jobs",     show: isFreelancer },
+    { label: "+ Create Job", content: "create",      show: isClientRole },
+    { label: "Moderator",    content: "moderator",   show: true         },
+    { label: "My Tier",      content: "tier",        show: true         },
   ].filter(t => t.show);
 
-  // If no role yet — show create job for admin, tier for others
-  const fallbackTabs = [
-    { label: "+ Create Job", content: "create", show: isAdmin },
-    { label: "My Tier",      content: "tier",   show: true },
-  ].filter(t => t.show);
+  const activeContent = TABS[tab]?.content ?? "tier";
+  useEffect(() => { if (tab >= TABS.length) setTab(0); }, [TABS.length, tab]);
 
-  const visibleTabs   = TABS.length > 0 ? TABS : fallbackTabs;
-  const activeContent = visibleTabs[tab]?.content ?? "tier";
-
-  // Reset tab if out of range
-  useEffect(() => {
-    if (tab >= visibleTabs.length) setTab(0);
-  }, [visibleTabs.length, tab]);
+  // Role label for display
+  const roleLabel = isModerator ? "Moderator" : isFreelancer ? "Freelancer" : "Client";
 
   return (
     <div className="app">
       <Header workBalance={workBalance} tier={tier} />
-
       <main className="main">
         {!connected && (
           <div className="warn-banner" style={{ borderColor: "var(--blue)", color: "var(--blue)", background: "rgba(56,189,248,.07)" }}>
@@ -118,12 +88,12 @@ function Inner() {
           </div>
         )}
 
-        {/* Balance bar */}
         {connected && (
           <div style={{ display: "flex", gap: 12, marginBottom: 20, flexWrap: "wrap" }}>
             {[
               { label: "APT Balance",  val: aptBalance?.toFixed(4)  ?? "…", color: "var(--blue)"  },
               { label: "WORK Balance", val: workBalance?.toFixed(1)  ?? "…", color: "var(--green)" },
+              { label: "Role",         val: roleLabel ?? "Unknown",          color: "var(--muted)" },
               { label: "Address",      val: addr ? `${addr.slice(0,10)}…${addr.slice(-4)}` : "…", color: "var(--muted)" },
             ].map(({ label, val, color }) => (
               <div key={label} style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 6, padding: "8px 14px" }}>
@@ -134,39 +104,21 @@ function Inner() {
           </div>
         )}
 
-        {/* Tabs */}
         <div className="tabs">
-          {visibleTabs.map((t, i) => (
-            <button key={t.label}
-              className={`tab-btn ${tab === i ? "active" : ""}`}
-              onClick={() => setTab(i)}>
+          {TABS.map((t, i) => (
+            <button key={`${t.label}-${i}`} className={`tab-btn ${tab === i ? "active" : ""}`} onClick={() => setTab(i)}>
               {t.label}
             </button>
           ))}
-          <button className="btn btn-secondary btn-sm" onClick={refresh}
-            style={{ marginLeft: "auto", marginBottom: 1 }}>
-            ↻
-          </button>
+          <button className="btn btn-secondary btn-sm" onClick={refresh} style={{ marginLeft: "auto", marginBottom: 1 }}>↻</button>
         </div>
 
-        {/* Content */}
-        {activeContent === "client_jobs" && (
-          <ClientJobs jobs={jobs} account={account} onToast={toast} onRefresh={refresh} />
-        )}
-        {activeContent === "fl_jobs" && (
-          <FreelancerJobs jobs={jobs} account={account} onToast={toast} onRefresh={refresh} />
-        )}
-        {activeContent === "create" && (
-          <CreateJob onToast={toast} onCreated={() => { refresh(); setTab(0); }} />
-        )}
-        {activeContent === "moderator" && (
-          <ModeratorDashboard jobs={jobs} onToast={toast} onRefresh={refresh} />
-        )}
-        {activeContent === "tier" && (
-          <TierProgress workBalance={workBalance} tier={tier} score={score} />
-        )}
+        {activeContent === "client_jobs" && <ClientJobs     jobs={jobs} account={account} onToast={toast} onRefresh={refresh} />}
+        {activeContent === "fl_jobs"     && <FreelancerJobs jobs={jobs} account={account} onToast={toast} onRefresh={refresh} />}
+        {activeContent === "create"      && <CreateJob onToast={toast} onCreated={() => { refresh(); setTab(0); }} />}
+        {activeContent === "moderator"   && <ModeratorDashboard jobs={jobs} isModerator={isModerator} onToast={toast} onRefresh={refresh} />}
+        {activeContent === "tier"        && <TierProgress workBalance={workBalance} tier={tier} score={score} />}
       </main>
-
       <ToastStack toasts={toasts} />
     </div>
   );
@@ -174,11 +126,7 @@ function Inner() {
 
 export default function App() {
   return (
-    <AptosWalletAdapterProvider
-      autoConnect={true}
-      optInWallets={["Petra"]}
-      dappConfig={{ network: Network.TESTNET }}
-    >
+    <AptosWalletAdapterProvider autoConnect={true} optInWallets={["Petra"]} dappConfig={{ network: Network.TESTNET }}>
       <Inner />
     </AptosWalletAdapterProvider>
   );

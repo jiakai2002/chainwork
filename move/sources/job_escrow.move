@@ -227,10 +227,13 @@ module chainwork::job_escrow {
         let treasury  = borrow_global_mut<Treasury>(admin_addr);
         coin::merge(&mut treasury.funds, fee_coins);
 
-        let base_work  = total * WORK_PER_APT;
-        let streak     = reputation::streak_days(freelancer);
+        let base_work    = total * WORK_PER_APT;
+        let streak       = reputation::streak_days(freelancer);
         let streak_bonus = (base_work * (streak / 7) * STREAK_BONUS_BPS) / 10000;
-        reputation::record_milestone_complete(freelancer, base_work + streak_bonus);
+        let total_work   = base_work + streak_bonus;
+        // Mint WORK tokens to freelancer using deployer's stored Caps
+        work_token::mint_to(admin_addr, freelancer, total_work);
+        reputation::record_milestone_complete(freelancer, total_work);
         reputation::record_job_completed(client);
     }
 
@@ -315,7 +318,7 @@ module chainwork::job_escrow {
         release_to_freelancer: bool,
         admin_addr:      address,
     ) acquires JobStore, Treasury {
-        assert!(signer::address_of(admin) == admin_addr, E_NOT_CLIENT);
+        // Any moderator can resolve disputes
         let store = borrow_global_mut<JobStore>(admin_addr);
         let job   = table::borrow_mut(&mut store.jobs, job_id);
         let m     = std::vector::borrow_mut(&mut job.milestones, milestone_index);

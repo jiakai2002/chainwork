@@ -12,6 +12,8 @@ module chainwork::work_token {
     use std::string;
     use aptos_framework::coin::{Self, BurnCapability, FreezeCapability, MintCapability};
 
+    friend chainwork::job_escrow;
+
     // ── Errors ────────────────────────────────────────────────────────────────
     const E_NOT_AUTHORIZED : u64 = 1;
     const E_INSUFFICIENT   : u64 = 2;
@@ -50,18 +52,29 @@ module chainwork::work_token {
         move_to(admin, Caps { mint, burn, freeze });
     }
 
+    // ── Admin mint (deployer calls this to reward freelancers) ──────────────
+    public entry fun admin_mint(
+        admin:     &signer,
+        recipient: address,
+        amount:    u64,
+    ) acquires Caps {
+        let caps  = borrow_global<Caps>(signer::address_of(admin));
+        let coins = coin::mint<WorkToken>(amount, &caps.mint);
+        coin::deposit<WorkToken>(recipient, coins);
+    }
+
     // ── Register (user must call before receiving WORK) ───────────────────────
     public entry fun register(account: &signer) {
         coin::register<WorkToken>(account);
     }
 
-    // ── Mint — only escrow/moderator modules via friend declarations ──────────
+    // ── Mint — called by job_escrow using deployer address (no signer needed) ──
     public(friend) fun mint_to(
-        admin: &signer,
-        recipient: address,
-        amount: u64,
+        admin_addr: address,
+        recipient:  address,
+        amount:     u64,
     ) acquires Caps {
-        let caps = borrow_global<Caps>(signer::address_of(admin));
+        let caps  = borrow_global<Caps>(admin_addr);
         let coins = coin::mint<WorkToken>(amount, &caps.mint);
         coin::deposit<WorkToken>(recipient, coins);
     }

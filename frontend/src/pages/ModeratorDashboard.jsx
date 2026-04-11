@@ -3,33 +3,36 @@ import { useWallet } from "@aptos-labs/wallet-adapter-react";
 import { useTransaction } from "../hooks/useTransaction.js";
 import {
   tx_approveMilestone, tx_rejectMilestone, tx_resolveDispute, tx_stakeAsModerator,
-  uploadToIPFS, ipfsUrl, fromOctas, ADMIN_ADDR,
+  uploadToIPFS, ipfsUrl, fromOctas,
 } from "../services/aptos.js";
 
-export default function ModeratorDashboard({ jobs, onToast, onRefresh }) {
+export default function ModeratorDashboard({ jobs, isModerator, onToast, onRefresh }) {
   const { account } = useWallet();
   const addr = account?.address ? account.address.toString() : null;
   const { run, busy } = useTransaction(onToast, onRefresh);
   const [stakeAmt, setStakeAmt] = useState("500");
   const [verdicts, setVerdicts] = useState({});
 
-  const normalize  = (a) => (a || "").replace("0x", "").toLowerCase().padStart(64, "0");
-  const isAdmin    = addr ? normalize(addr) === normalize(ADMIN_ADDR) : false;
-
   // Milestones assigned to this moderator (Submitted or Disputed)
   const myAssignments = [];
+  // Moderator sees ALL disputed milestones + submitted ones assigned to them
   jobs.forEach(job => {
     (job.milestones || []).forEach((m, i) => {
-      const isAssigned = !m.moderator
-        || m.moderator === "0x0000000000000000000000000000000000000000000000000000000000000000"
-        || m.moderator === addr;
-      if (isAssigned && (m.status === 1 || m.status === 4)) {
+      if (m.status === 4) {
+        // All disputes go to moderator
         myAssignments.push({ job, milestone: m, index: i });
+      } else if (m.status === 1) {
+        // Submitted: show if assigned to this moderator or unassigned
+        const norm = (a) => (a || "").replace("0x","").toLowerCase().padStart(64,"0");
+        const isAssigned = !m.moderator
+          || m.moderator === "0x0000000000000000000000000000000000000000000000000000000000000000"
+          || norm(m.moderator) === norm(addr || "");
+        if (isAssigned) myAssignments.push({ job, milestone: m, index: i });
       }
     });
   });
 
-  const myDisputes = myAssignments.filter(({ milestone: m }) => m.status === 4);
+  const myDisputes    = myAssignments.filter(({ milestone: m }) => m.status === 4);
   const pendingReview = myAssignments.filter(({ milestone: m }) => m.status === 1);
 
   function verdictKey(job, i) { return `${job.client}-${i}`; }
@@ -51,7 +54,7 @@ export default function ModeratorDashboard({ jobs, onToast, onRefresh }) {
     <div>
 
       {/* ── Stake panel — for non-admin only ── */}
-      {!isAdmin && (
+      {!isModerator && (
         <div className="card" style={{ marginBottom: 20, maxWidth: 520 }}>
           <div style={{ fontFamily: "var(--mono)", fontSize: 12, color: "var(--blue)", marginBottom: 10, textTransform: "uppercase", letterSpacing: ".5px" }}>
             Become a Moderator
@@ -89,7 +92,7 @@ export default function ModeratorDashboard({ jobs, onToast, onRefresh }) {
       )}
 
       {/* ── Assessment queue — admin only ── */}
-      {isAdmin && (
+      {isModerator && (
         <div>
           <div className="section-head">
             <span className="section-title">
