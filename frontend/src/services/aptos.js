@@ -108,7 +108,9 @@ export async function loadAllJobs() {
       } catch { /* skip */ }
     }
     // Only return the latest job
-    return jobs.length > 0 ? [jobs[jobs.length - 1]] : [];
+    // return jobs.length > 0 ? [jobs[jobs.length - 1]] : [];
+    // for demo, ignore first 6
+    return jobs.filter(j => j.id >= 6);
   } catch (e) { console.error("loadAllJobs:", e); return []; }
 }
 
