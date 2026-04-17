@@ -1,17 +1,17 @@
 # Move build artifacts
-/build/
-/sources/**/build/
+**/build/
 **/*.mv
 **/*.mvb
 
 # Aptos CLI artifacts
-/aptos_config/
+.aptos/
+aptos_config/
 
 # Node / frontend
-/node_modules/
-/dist/
-/.env
-/.vite
+**/node_modules/
+dist/
+.vite/
+.env
 
 # Logs
 npm-debug.log*
