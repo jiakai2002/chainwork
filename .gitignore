@@ -1,5 +1,5 @@
 # Move build artifacts
-**/build/
+**/build/chainwork
 **/*.mv
 **/*.mvb
 
